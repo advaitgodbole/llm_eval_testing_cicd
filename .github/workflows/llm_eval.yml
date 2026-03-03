@@ -1,0 +1,113 @@
+name: LLM Evaluation Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  # MLflow will log results to this Databricks-hosted experiment.
+  # For local-only CI, change MLFLOW_TRACKING_URI to a file path.
+  MLFLOW_TRACKING_URI: "databricks"
+  MLFLOW_EXPERIMENT_NAME: "/Shared/side-effect-risk-eval"
+
+jobs:
+  # ── Job 1: End-to-end evaluation ───────────────────────────────
+  e2e-eval:
+    name: End-to-End Evals
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install ".[dev]"
+
+      - name: Run end-to-end single-turn evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          pytest tests/test_e2e_single_turn.py \
+            -m "llm_eval" \
+            -v \
+            --tb=short \
+            --junitxml=reports/e2e-single-turn.xml
+
+      - name: Run end-to-end multi-turn evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          pytest tests/test_e2e_multi_turn.py \
+            -m "llm_eval" \
+            -v \
+            --tb=short \
+            --junitxml=reports/e2e-multi-turn.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-eval-reports
+          path: reports/
+
+  # ── Job 2: Component-level evaluation ──────────────────────────
+  component-eval:
+    name: Component-Level Evals
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install ".[dev]"
+
+      - name: Run component-level evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          pytest tests/test_component_level.py \
+            -m "component" \
+            -v \
+            --tb=short \
+            --junitxml=reports/component-eval.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-eval-reports
+          path: reports/
+
+  # ── Job 3: Quality gate summary ────────────────────────────────
+  quality-gate:
+    name: Quality Gate Check
+    needs: [e2e-eval, component-eval]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.e2e-eval.result }}" != "success" ] || \
+             [ "${{ needs.component-eval.result }}" != "success" ]; then
+            echo "❌ Quality gates failed. Check individual job logs."
+            exit 1
+          fi
+          echo "✅ All quality gates passed."

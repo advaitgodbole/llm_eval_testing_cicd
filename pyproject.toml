@@ -1,0 +1,29 @@
+[project]
+name = "llm-eval-testing-cicd"
+version = "0.1.0"
+description = "Medicine side-effect risk classification with DeepEval-style CI/CD testing via MLflow 3.0+"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mlflow[databricks]>=3.1.0",
+    "openai>=1.0.0",
+    "pytest>=8.0.0",
+    "databricks-connect",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "llm_eval: marks tests as LLM evaluation tests (may be slow)",
+    "quality_gate: marks tests that enforce quality gates for CI/CD",
+    "component: marks component-level evaluation tests",
+]

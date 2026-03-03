@@ -1,0 +1,162 @@
+[
+  {
+    "inputs": {"patient_report": "I started taking amoxicillin two days ago and now I have difficulty breathing and my throat feels like it's closing up. My face is swelling."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": [
+        "Difficulty breathing and throat swelling suggest anaphylaxis",
+        "This is a life-threatening allergic reaction"
+      ],
+      "guidelines": [
+        "Must classify as high risk",
+        "Must recommend calling emergency services immediately"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "After my first dose of lisinopril I had a seizure that lasted about two minutes. I've never had a seizure before."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": [
+        "New-onset seizure is a serious adverse event"
+      ],
+      "guidelines": [
+        "Must classify as high risk",
+        "Must recommend seeking emergency care"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I've been on metformin for a week and I have mild nausea after meals and some stomach gurgling. It's not too bad."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": [
+        "Mild GI symptoms are common with metformin",
+        "These are expected and typically self-limiting"
+      ],
+      "guidelines": [
+        "Must classify as low risk",
+        "May suggest taking medication with food"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "Since starting the new antihistamine I've been feeling drowsy during the day, especially after the morning dose."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": [
+        "Drowsiness is a common expected side effect of antihistamines"
+      ],
+      "guidelines": [
+        "Must classify as low risk",
+        "Should advise caution when driving or operating machinery"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I developed a widespread rash across my chest and arms three days after starting allopurinol. The rash is red and itchy, no blisters."},
+    "expectations": {
+      "expected_risk_level": "medium",
+      "expected_facts": [
+        "Widespread drug rash without blistering is concerning but not immediately life-threatening"
+      ],
+      "guidelines": [
+        "Must classify as medium risk",
+        "Should recommend contacting a physician",
+        "Should mention monitoring for worsening (blistering or mucosal involvement)"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I've been having persistent vomiting for the past 24 hours since taking my iron supplements. Can't keep anything down."},
+    "expectations": {
+      "expected_risk_level": "medium",
+      "expected_facts": [
+        "Persistent vomiting can lead to dehydration",
+        "This goes beyond typical mild GI upset"
+      ],
+      "guidelines": [
+        "Must classify as medium risk",
+        "Should recommend seeking medical attention if vomiting continues"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I noticed my eyes and skin are turning yellow after two months on isoniazid for TB treatment. I also feel very tired."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": [
+        "Jaundice suggests drug-induced hepatotoxicity",
+        "Isoniazid is known to cause liver damage"
+      ],
+      "guidelines": [
+        "Must classify as high risk",
+        "Must recommend stopping the medication and seeing a doctor urgently"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "My mouth has been dry since I started taking this antidepressant. I just drink more water and it's manageable."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": [
+        "Dry mouth is a common and mild side effect of many antidepressants"
+      ],
+      "guidelines": [
+        "Must classify as low risk"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I started a new SSRI last week and now I'm having rapid heartbeat, heavy sweating, agitation, and my muscles keep twitching."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": [
+        "These symptoms are consistent with serotonin syndrome",
+        "Serotonin syndrome is a potentially life-threatening condition"
+      ],
+      "guidelines": [
+        "Must classify as high risk",
+        "Must recommend seeking emergency care"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I've had a mild headache for the past two days since starting my blood pressure medication. It's mostly in the afternoon."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": [
+        "Mild headache is a common side effect of antihypertensives"
+      ],
+      "guidelines": [
+        "Must classify as low risk",
+        "Should note that this typically resolves as the body adjusts"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I got a flu shot yesterday and now my arm is sore and a bit red at the injection site."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": [
+        "Injection site soreness and redness are normal vaccine reactions"
+      ],
+      "guidelines": [
+        "Must classify as low risk"
+      ]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I'm having sudden changes in my vision — everything looks blurry and I'm seeing halos around lights. I started a new eye drop medication this week."},
+    "expectations": {
+      "expected_risk_level": "medium",
+      "expected_facts": [
+        "Vision changes are concerning and warrant medical evaluation"
+      ],
+      "guidelines": [
+        "Must classify as medium risk",
+        "Must recommend seeing an eye specialist or physician promptly"
+      ]
+    }
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "inputs": {"patient_report": "I'm having severe chest pain and difficulty breathing after taking my new medication."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": ["Chest pain and breathing difficulty are life-threatening symptoms"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I have a mild headache that started yesterday after beginning the new prescription."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": ["Mild headache is a common, non-serious side effect"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I developed a rash on my arms and torso. It's itchy but no blisters. Started after taking sulfamethoxazole."},
+    "expectations": {
+      "expected_risk_level": "medium",
+      "expected_facts": ["Drug rash without blistering is concerning but not life-threatening"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "Feeling a bit sleepy during the day since starting the antihistamine. Otherwise fine."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": ["Drowsiness is an expected side effect of antihistamines"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I had a seizure 30 minutes after taking my medication. This has never happened before."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": ["New-onset seizure is a severe adverse event requiring emergency care"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "My fever has been at 102°F for two days since starting the antibiotic. I also feel very achy."},
+    "expectations": {
+      "expected_risk_level": "medium",
+      "expected_facts": ["Persistent high fever may indicate a drug reaction or complication"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "I've noticed some dry mouth since starting the new antidepressant. Drinking water helps."},
+    "expectations": {
+      "expected_risk_level": "low",
+      "expected_facts": ["Dry mouth is a mild and common antidepressant side effect"]
+    }
+  },
+  {
+    "inputs": {"patient_report": "My skin and eyes are turning yellow. I've been on isoniazid for 6 weeks for TB."},
+    "expectations": {
+      "expected_risk_level": "high",
+      "expected_facts": ["Jaundice indicates hepatotoxicity, isoniazid is a known cause"]
+    }
+  }
+]
