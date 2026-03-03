@@ -310,33 +310,290 @@ The `.github/workflows/llm_eval.yml` runs three jobs:
 
 ---
 
-## Extending
+## How to Unit Test: Developer Workflows
 
-### Add a new side-effect test case
+This section walks through the day-to-day developer flows for extending the project — adding test cases, writing scorers, modifying agents, and running everything locally before CI picks it up.
 
-Add to `tests/eval_data/golden_dataset.json`:
+### Workflow 1: Adding a New Test Case to an Existing Dataset
+
+**Scenario:** A new drug side-effect pattern was reported in production and you want to make sure the classifier handles it correctly going forward.
+
+**Step 1 — Add the case to the golden dataset.** Open `tests/eval_data/golden_dataset.json` and append a new record:
+
 ```json
 {
-  "inputs": {"patient_report": "Patient report text..."},
+  "inputs": {
+    "patient_report": "I've been taking warfarin and noticed blood in my urine and large bruises appearing without injury."
+  },
   "expectations": {
     "expected_risk_level": "high",
-    "expected_facts": ["Clinical fact 1"],
-    "guidelines": ["Must recommend emergency care"]
+    "expected_facts": [
+      "Blood in urine and spontaneous bruising suggest excessive anticoagulation",
+      "This is a potentially life-threatening bleeding event"
+    ],
+    "guidelines": [
+      "Must classify as high risk",
+      "Must recommend seeking emergency care and stopping warfarin until physician review"
+    ]
   }
 }
 ```
 
-### Add a domain-specific scorer
+The `expectations` object drives three different scorers automatically:
+- `expected_risk_level` → used by the `risk_level_accuracy` scorer
+- `expected_facts` → used by the `Correctness()` built-in scorer
+- `guidelines` → used by the `ExpectationsGuidelines()` built-in scorer
+
+**Step 2 — Run the relevant tests locally to see if the classifier handles it:**
+
+```bash
+# Run just the golden-dataset test (fastest feedback loop)
+pytest tests/test_e2e_single_turn.py::test_classifier_golden_dataset -v
+
+# Run the high-risk recall test (this case should appear here too)
+pytest tests/test_e2e_single_turn.py::test_high_risk_recall -v
+```
+
+**Step 3 — If the test passes, commit.** If it fails, you've found a regression — either fix the agent or adjust the threshold if the expectation was unrealistic.
+
+**Step 4 — Push and let CI run the full suite.** The GitHub Actions workflow runs all test files in parallel and blocks the merge if any quality gate fails.
+
+### Workflow 2: Writing a New Custom Scorer
+
+**Scenario:** You want to verify that the classifier always mentions the specific drug name in its rationale when a drug is named in the patient report.
+
+**Step 1 — Define the scorer.** Add it to the test file where you'll use it (or to a shared `scorers.py` if you want reuse). The `@scorer` decorator and `Feedback` return type are all you need:
+
+```python
+from mlflow.genai.scorers import scorer
+from mlflow.entities import Feedback
+
+@scorer
+def mentions_drug_name(inputs: dict, outputs: dict) -> Feedback:
+    """Verify that the response references the drug mentioned in the report."""
+    report = inputs.get("patient_report", "").lower()
+    response = outputs.get("response", "").lower()
+
+    # Extract drug names from a known list (simplified)
+    known_drugs = ["amoxicillin", "lisinopril", "metformin", "warfarin",
+                   "isoniazid", "allopurinol", "sertraline"]
+    mentioned = [d for d in known_drugs if d in report]
+
+    if not mentioned:
+        return Feedback(
+            name="mentions_drug_name",
+            value="yes",
+            rationale="No known drug in the report — skipping",
+        )
+
+    missing = [d for d in mentioned if d not in response]
+    if missing:
+        return Feedback(
+            name="mentions_drug_name",
+            value="no",
+            rationale=f"Drug(s) in report but not in response: {missing}",
+        )
+    return Feedback(
+        name="mentions_drug_name",
+        value="yes",
+        rationale=f"Response mentions: {mentioned}",
+    )
+```
+
+There are three scorer signatures you can use depending on what you need to inspect:
+
+| Signature | When to Use |
+|-----------|------------|
+| `(inputs, outputs)` | Checking output properties against the input |
+| `(inputs, outputs, expectations)` | Comparing output against ground truth |
+| `(inputs, outputs, expectations, trace: Trace)` | Inspecting internal pipeline spans (component-level) |
+
+**Step 2 — Write a test that uses it.** Follow the standard three-step pattern:
+
+```python
+@pytest.mark.llm_eval
+def test_drug_name_mentioned(golden_dataset):
+    """Classifier should reference the drug by name in its rationale."""
+    with mlflow.start_run(run_name="ci_drug_name_check"):
+        results = mlflow.genai.evaluate(
+            data=golden_dataset,
+            predict_fn=side_effect_classifier,
+            scorers=[mentions_drug_name],
+        )
+    assert_quality_gates(results, gates={"mentions_drug_name": 0.9})
+```
+
+**Step 3 — Run it locally:**
+
+```bash
+pytest tests/test_e2e_single_turn.py::test_drug_name_mentioned -v
+```
+
+**Step 4 — Tune the threshold.** Start with a lenient threshold (e.g. 0.7), observe the actual pass rate in the MLflow experiment UI, then tighten it as the agent improves.
+
+### Workflow 3: Adding a Component-Level Scorer That Inspects Trace Spans
+
+**Scenario:** You want to verify that the retriever returns at least 2 documents for every query, not just that it was called.
+
+**Step 1 — Write the scorer with `trace: Trace` in the signature:**
 
 ```python
 @scorer
-def mentions_drug_interaction(inputs: dict, outputs: dict) -> Feedback:
-    report = inputs.get("patient_report", "").lower()
-    response = outputs.get("response", "").lower()
-    if "interaction" in report and "interaction" not in response:
-        return Feedback(value="no", rationale="Report mentions interaction but response doesn't address it")
-    return Feedback(value="yes", rationale="OK")
+def retriever_returns_enough_docs(trace: Trace) -> Feedback:
+    """Verify the retriever returned at least 2 documents."""
+    retriever_spans = trace.search_spans(span_type=SpanType.RETRIEVER)
+    if not retriever_spans:
+        return Feedback(
+            name="retriever_doc_count",
+            value="no",
+            rationale="No RETRIEVER span found",
+        )
+
+    outputs = retriever_spans[0].outputs
+    doc_count = len(outputs) if isinstance(outputs, list) else 0
+    return Feedback(
+        name="retriever_doc_count",
+        value="yes" if doc_count >= 2 else "no",
+        rationale=f"Retriever returned {doc_count} documents",
+    )
 ```
+
+**Step 2 — Add a test in `test_component_level.py`** and run it against the `triage_then_explain` pipeline (which includes the retriever):
+
+```python
+@pytest.mark.llm_eval
+@pytest.mark.component
+def test_retriever_doc_count(component_dataset):
+    with mlflow.start_run(run_name="ci_retriever_doc_count"):
+        results = mlflow.genai.evaluate(
+            data=component_dataset,
+            predict_fn=triage_then_explain,
+            scorers=[retriever_returns_enough_docs],
+        )
+    assert_quality_gates(results, gates={"retriever_doc_count": 1.0})
+```
+
+### Workflow 4: Modifying the Agent and Validating the Change
+
+**Scenario:** You change the system prompt or switch models, and need to verify nothing regressed.
+
+**Step 1 — Make the change in `src/my_agent/agent.py`.** For example, update the `CLASSIFICATION_SYSTEM_PROMPT` to add a new rule.
+
+**Step 2 — Run the full test suite locally:**
+
+```bash
+# Run everything
+pytest tests/ -m llm_eval -v
+
+# Or run just the quality-gate tests for a faster check
+pytest tests/ -m quality_gate -v
+```
+
+**Step 3 — Compare runs in the MLflow UI.** Every test creates a named run (e.g. `ci_classifier_golden`, `ci_high_risk_recall`). Open the experiment in the MLflow UI and compare the metrics from your new run against the previous baseline.
+
+**Step 4 — If you're doing an A/B test between two agent variants**, the `test_ab_comparison` test already does this — it runs both `side_effect_classifier` and `rag_side_effect_agent` on the same data and prints the accuracy side-by-side. You can duplicate this pattern for any two agents:
+
+```python
+@pytest.mark.llm_eval
+def test_my_ab_comparison(golden_dataset):
+    with mlflow.start_run(run_name="ab_variant_a"):
+        results_a = mlflow.genai.evaluate(
+            data=golden_dataset,
+            predict_fn=agent_variant_a,
+            scorers=[risk_level_accuracy],
+        )
+    with mlflow.start_run(run_name="ab_variant_b"):
+        results_b = mlflow.genai.evaluate(
+            data=golden_dataset,
+            predict_fn=agent_variant_b,
+            scorers=[risk_level_accuracy],
+        )
+    acc_a = results_a.metrics.get("risk_level_accuracy/mean", 0)
+    acc_b = results_b.metrics.get("risk_level_accuracy/mean", 0)
+    print(f"Variant A: {acc_a:.2%}, Variant B: {acc_b:.2%}")
+```
+
+### Workflow 5: Adding a New Agent Variant
+
+**Scenario:** You've built a new classification approach (e.g. chain-of-thought, or a fine-tuned model) and want to evaluate it.
+
+**Step 1 — Add the function to `src/my_agent/agent.py`**, decorated with `@mlflow.trace`:
+
+```python
+@mlflow.trace
+def cot_side_effect_classifier(patient_report: str) -> dict:
+    """Chain-of-thought variant of the risk classifier."""
+    # ... your implementation ...
+    return {"response": raw, "risk_level": ..., "rationale": ..., "recommended_action": ...}
+```
+
+**Step 2 — Export it from `__init__.py`:**
+
+```python
+from my_agent.agent import cot_side_effect_classifier
+```
+
+**Step 3 — Write a test.** You can reuse the existing golden dataset, scorers, and quality gates — just swap the `predict_fn`:
+
+```python
+@pytest.mark.llm_eval
+def test_cot_classifier(golden_dataset, e2e_scorers):
+    with mlflow.start_run(run_name="ci_cot_classifier"):
+        results = mlflow.genai.evaluate(
+            data=golden_dataset,
+            predict_fn=cot_side_effect_classifier,
+            scorers=e2e_scorers + [risk_level_accuracy],
+        )
+    assert_quality_gates(results, gates={
+        "safety": 1.0,
+        "risk_level_accuracy": 0.85,
+    })
+```
+
+The function signature contract is: take `patient_report: str`, return a `dict` with at least `response` and `risk_level`. As long as a new agent follows that contract, all existing scorers and datasets work unchanged.
+
+### Workflow 6: Running on Databricks Instead of Locally
+
+**Step 1 — Upload the project to workspace files** (the project root maps to a workspace directory):
+
+```bash
+databricks workspace import /Users/you@company.com/side-effect-risk-eval/src/my_agent/agent.py \
+  --file src/my_agent/agent.py --format AUTO --overwrite
+# ... repeat for all files, or use import-dir
+```
+
+**Step 2 — Open `notebooks/run_all_evals.py` in the workspace.** It configures the agent to use a Databricks Foundation Model API endpoint and imports everything from the deployed project files.
+
+**Step 3 — Run as a job or interactively.** All 9 evaluations log to a single MLflow experiment, viewable in the workspace MLflow UI.
+
+### Quick Reference: The Developer Loop
+
+```
+ ┌─────────────────────────────────────────────────┐
+ │  1. Edit                                         │
+ │     • agent.py (new agent or prompt change)      │
+ │     • golden_dataset.json (new test case)        │
+ │     • test_*.py (new scorer or test function)    │
+ │                                                   │
+ │  2. Run locally                                   │
+ │     pytest tests/ -m llm_eval -v                  │
+ │                                                   │
+ │  3. Inspect results                               │
+ │     • Terminal: pass/fail + quality gate output    │
+ │     • MLflow UI: traces, metrics, comparisons     │
+ │                                                   │
+ │  4. Iterate                                       │
+ │     • Adjust thresholds, fix agent, add cases     │
+ │                                                   │
+ │  5. Push                                          │
+ │     • CI runs the full suite automatically        │
+ │     • Quality gate blocks merge on failure        │
+ └─────────────────────────────────────────────────┘
+```
+
+---
+
+## Extending
 
 ### Persist datasets in Unity Catalog
 
