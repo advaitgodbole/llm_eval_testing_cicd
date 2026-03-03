@@ -25,13 +25,14 @@
 
 import sys, os
 
-# The project is uploaded under /Workspace/Users/.../side-effect-risk-eval/project
-# Add src/ and tests/ to the Python path so imports resolve.
-_project_root = os.path.dirname(
+# The notebook lives at <project_root>/notebooks/run_all_evals.
+# Go up one level from the notebook's directory to reach the project root.
+_notebook_dir = os.path.dirname(
     dbutils.notebook.entry_point.getDbutils()
     .notebook().getContext().notebookPath().get()
     .replace("/Workspace", "")
 )
+_project_root = os.path.dirname(_notebook_dir)
 _ws_root = f"/Workspace{_project_root}"
 sys.path.insert(0, os.path.join(_ws_root, "src"))
 sys.path.insert(0, os.path.join(_ws_root, "tests"))
